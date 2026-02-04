@@ -1,6 +1,6 @@
 {
   "name": "translator",
-  "version": "2.0.0",
+  "version": "2.2.0",
   "dependencies": {
     "@capacitor/android": "^7.4.4",
     "@capacitor/assets": "^3.0.5",
@@ -22,8 +22,8 @@
   },
   "scripts": {
     "icons": "node generate-icons.js",
-    "build": "rimraf dist && pnpm run icons && mkdir dist && copyfiles index.html manifest.json sw.js _redirects icon-*.svg dist && esbuild index.tsx --bundle --minify --outfile=dist/bundle.js --loader:.tsx=tsx --define:process.env.NODE_ENV='\"production\"'",
-    "build:dev": "rimraf dist && pnpm run icons && mkdir dist && copyfiles index.html manifest.json sw.js _redirects icon-*.svg dist && esbuild index.tsx --bundle --outfile=dist/bundle.js --loader:.tsx=tsx --define:process.env.NODE_ENV='\"development\"'",
+    "build": "rimraf dist && pnpm run icons && mkdir dist && copyfiles index.html manifest.json sw.js _redirects icon-*.png dist && esbuild index.tsx --bundle --minify --outfile=dist/bundle.js --loader:.tsx=tsx --define:process.env.NODE_ENV='\"production\"'",
+    "build:dev": "rimraf dist && pnpm run icons && mkdir dist && copyfiles index.html manifest.json sw.js _redirects icon-*.png dist && esbuild index.tsx --bundle --outfile=dist/bundle.js --loader:.tsx=tsx --define:process.env.NODE_ENV='\"development\"'",
     "dev": "pnpm run build:dev && wrangler pages dev dist --port 8788"
   },
   "pnpm": {

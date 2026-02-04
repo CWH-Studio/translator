@@ -109,7 +109,7 @@ const App: React.FC = () => {
         </div>
       </main>
        <footer className="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
-            <p>Powered by Google Gemini. Built with React & Tailwind CSS. WHStudio@2025. Version 2.0</p>
+            <p>Powered by Google Gemini. Built with React & Tailwind CSS. WHStudio@2025. Version 2.2</p>
         </footer>
     </div>
   );

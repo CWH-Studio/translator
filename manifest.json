@@ -1,7 +1,7 @@
 {
   "name": "Translator",
-  "short_name": "Kamus",
-  "description": "An advanced dictionary app that provides high-accuracy translations between English, Malay, and Chinese, complete with example sentences and text-to-speech pronunciation, powered by Gemini.",
+  "short_name": "Translator",
+  "description": "An advanced dictionary app that provides high-accuracy translations between English, Malay, and Chinese, complete with example sentences and text-to-speech pronunciation, powered by AI.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -10,15 +10,15 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icon-192.svg",
+      "src": "/icon-192.png",
       "sizes": "192x192",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.svg",
+      "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/svg+xml",
+      "type": "image/png",
       "purpose": "any maskable"
     }
   ],
