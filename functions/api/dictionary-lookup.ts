@@ -94,7 +94,21 @@ async function callPollinationsAI(
   }
 
   const data = (await response.json()) as any;
-  return data.choices[0].message.content;
+  
+  // Safely extract the content as a string
+  const content = data?.choices?.[0]?.message?.content;
+  if (!content) {
+    throw new Error("Empty or invalid response from Pollinations API");
+  }
+  
+  // Ensure it's a string
+  const responseText = typeof content === "string" ? content : JSON.stringify(content);
+  
+  if (!responseText || responseText.trim() === "") {
+    throw new Error("Empty response from Pollinations API");
+  }
+  
+  return responseText;
 }
 
 // Call Cloudflare AI with retry
@@ -172,6 +186,11 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
       }
     }
 
+    // Ensure responseText is a string before processing
+    if (typeof responseText !== "string") {
+      responseText = String(responseText);
+    }
+    
     console.log("AI response text:", responseText.substring(0, 300));
 
     // Clean up response text (sometimes models add markdown code blocks)
