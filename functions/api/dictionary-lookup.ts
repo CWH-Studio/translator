@@ -2,7 +2,6 @@
 
 interface Env {
   AI: any;
-  GEMINI_API_KEY: string;
 }
 
 const SYSTEM_PROMPT_TEMPLATE = (
@@ -48,8 +47,8 @@ Follow these instructions precisely:
 // Retry helper with exponential backoff
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
-  maxRetries: number = 3,
-  baseDelayMs: number = 500,
+  maxRetries: number = 5,
+  baseDelayMs: number = 1000,
 ): Promise<T> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt < maxRetries; attempt++) {
@@ -57,9 +56,11 @@ async function retryWithBackoff<T>(
       return await fn();
     } catch (error) {
       lastError = error instanceof Error ? error : new Error(String(error));
-      console.log(`Attempt ${attempt + 1} failed: ${lastError.message}`);
+      console.log(`Attempt ${attempt + 1}/${maxRetries} failed: ${lastError.message}`);
       if (attempt < maxRetries - 1) {
+        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
         const delay = baseDelayMs * Math.pow(2, attempt);
+        console.log(`Waiting ${delay}ms before retry...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
       }
     }
@@ -67,61 +68,7 @@ async function retryWithBackoff<T>(
   throw lastError;
 }
 
-// Fallback to Google Gemini API
-async function callGeminiAI(
-  text: string,
-  systemPrompt: string,
-  apiKey: string,
-): Promise<string> {
-  console.log("Falling back to Google Gemini API...");
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        contents: [
-          {
-            parts: [
-              { text: `${systemPrompt}\n\nAnalyze the word: "${text}"` }
-            ]
-          }
-        ],
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 2048,
-        }
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
-  }
-
-  const data = (await response.json()) as any;
-  
-  // Safely extract the content from Gemini response
-  const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-  if (!content) {
-    throw new Error("Empty or invalid response from Gemini API");
-  }
-  
-  // Ensure it's a string
-  const responseText = typeof content === "string" ? content : JSON.stringify(content);
-  
-  if (!responseText || responseText.trim() === "") {
-    throw new Error("Empty response from Gemini API");
-  }
-  
-  return responseText;
-}
-
-// Call Cloudflare AI with retry
+// Call Cloudflare AI
 async function callCloudflareAI(
   env: Env,
   text: string,
@@ -166,50 +113,24 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
     }
 
     const systemPrompt = SYSTEM_PROMPT_TEMPLATE(text);
-    let responseText = "";
-
-    // Try Cloudflare AI first with retry logic
-    try {
-      responseText = await retryWithBackoff(
-        () => callCloudflareAI(context.env, text, systemPrompt),
-        3, // max 3 retries
-        500, // 500ms base delay
-      );
-      console.log("Cloudflare AI succeeded");
-    } catch (cfError) {
-      console.error("Cloudflare AI failed after retries:", cfError);
-
-      // Fallback to Google Gemini API
-      try {
-        responseText = await retryWithBackoff(
-          () => callGeminiAI(text, systemPrompt, context.env.GEMINI_API_KEY),
-          2, // max 2 retries for fallback
-          1000, // 1s base delay
-        );
-        console.log("Gemini API fallback succeeded");
-      } catch (geminiError) {
-        console.error(
-          "Gemini API fallback also failed:",
-          geminiError,
-        );
-        throw new Error("All AI providers failed");
-      }
-    }
-
-    // Ensure responseText is a string before processing
-    if (typeof responseText !== "string") {
-      responseText = String(responseText);
-    }
     
+    // Call Cloudflare AI with 5 retries and exponential backoff
+    const responseText = await retryWithBackoff(
+      () => callCloudflareAI(context.env, text, systemPrompt),
+      5,    // max 5 retries
+      1000, // 1s base delay (1s, 2s, 4s, 8s, 16s)
+    );
+    
+    console.log("Cloudflare AI succeeded");
     console.log("AI response text:", responseText.substring(0, 300));
 
     // Clean up response text (sometimes models add markdown code blocks)
-    responseText = responseText
+    let cleanedResponse = responseText
       .replace(/```json/g, "")
       .replace(/```/g, "")
       .trim();
 
-    const jsonResponse = JSON.parse(responseText);
+    const jsonResponse = JSON.parse(cleanedResponse);
 
     // Validate structure
     if (
