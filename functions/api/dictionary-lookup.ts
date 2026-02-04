@@ -4,19 +4,9 @@ interface Env {
   AI: any;
 }
 
-export const onRequest = async (context: { request: Request; env: Env }) => {
-
-  try {
-    const { text } = (await context.request.json()) as { text: string };
-
-    if (!text) {
-      return new Response(JSON.stringify({ error: 'Missing text input' }), {
-        status: 400,
-        headers: { 'Content-Type': 'application/json' },
-      });
-    }
-
-    const systemPrompt = `You are an expert multilingual dictionary. Your task is to take a word or phrase, "${text}", and provide comprehensive details for it and its translations in English, Malay, and Chinese.
+const SYSTEM_PROMPT_TEMPLATE = (
+  text: string,
+) => `You are an expert multilingual dictionary. Your task is to take a word or phrase, "${text}", and provide comprehensive details for it and its translations in English, Malay, and Chinese.
 
 Follow these instructions precisely:
 1.  **Detect Language**: First, identify the language of the input "${text}". It must be one of English, Malay, or Chinese.
@@ -54,43 +44,170 @@ Follow these instructions precisely:
     }
     Do not include any text or markdown formatting outside of the JSON object. ONLY return the JSON object.`;
 
-    const response = await context.env.AI.run('@cf/meta/llama-3-8b-instruct', {
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: `Analyze the word: "${text}"` }
-      ]
-    });
+// Retry helper with exponential backoff
+async function retryWithBackoff<T>(
+  fn: () => Promise<T>,
+  maxRetries: number = 3,
+  baseDelayMs: number = 500,
+): Promise<T> {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      console.log(`Attempt ${attempt + 1} failed: ${lastError.message}`);
+      if (attempt < maxRetries - 1) {
+        const delay = baseDelayMs * Math.pow(2, attempt);
+        await new Promise((resolve) => setTimeout(resolve, delay));
+      }
+    }
+  }
+  throw lastError;
+}
 
-    // Cloudflare AI returns an object with a 'response' property containing the text
-    let responseText = '';
-    if (typeof response === 'object' && response !== null && 'response' in response) {
-      responseText = (response as any).response;
-    } else if (typeof response === 'string') {
-      responseText = response;
-    } else {
-       // Fallback for streaming or other response types if needed, though run() usually returns full response
-       responseText = JSON.stringify(response); 
+// Fallback to Pollinations.ai API
+async function callPollinationsAI(
+  text: string,
+  systemPrompt: string,
+): Promise<string> {
+  console.log("Falling back to Pollinations.ai API...");
+
+  const response = await fetch("https://text.pollinations.ai/openai", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "openai",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Analyze the word: "${text}"` },
+      ],
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      `Pollinations API error: ${response.status} ${response.statusText}`,
+    );
+  }
+
+  const data = (await response.json()) as any;
+  return data.choices[0].message.content;
+}
+
+// Call Cloudflare AI with retry
+async function callCloudflareAI(
+  env: Env,
+  text: string,
+  systemPrompt: string,
+): Promise<string> {
+  const response = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: `Analyze the word: "${text}"` },
+    ],
+  });
+
+  let responseText = "";
+  if (
+    typeof response === "object" &&
+    response !== null &&
+    "response" in response
+  ) {
+    responseText = (response as any).response;
+  } else if (typeof response === "string") {
+    responseText = response;
+  } else {
+    responseText = JSON.stringify(response);
+  }
+
+  if (!responseText || responseText.trim() === "") {
+    throw new Error("Empty response from Cloudflare AI");
+  }
+
+  return responseText;
+}
+
+export const onRequest = async (context: { request: Request; env: Env }) => {
+  try {
+    const { text } = (await context.request.json()) as { text: string };
+
+    if (!text) {
+      return new Response(JSON.stringify({ error: "Missing text input" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
-    console.log('AI response text:', responseText.substring(0, 300));
+    const systemPrompt = SYSTEM_PROMPT_TEMPLATE(text);
+    let responseText = "";
+
+    // Try Cloudflare AI first with retry logic
+    try {
+      responseText = await retryWithBackoff(
+        () => callCloudflareAI(context.env, text, systemPrompt),
+        3, // max 3 retries
+        500, // 500ms base delay
+      );
+      console.log("Cloudflare AI succeeded");
+    } catch (cfError) {
+      console.error("Cloudflare AI failed after retries:", cfError);
+
+      // Fallback to Pollinations.ai
+      try {
+        responseText = await retryWithBackoff(
+          () => callPollinationsAI(text, systemPrompt),
+          2, // max 2 retries for fallback
+          1000, // 1s base delay
+        );
+        console.log("Pollinations.ai fallback succeeded");
+      } catch (pollinationsError) {
+        console.error(
+          "Pollinations.ai fallback also failed:",
+          pollinationsError,
+        );
+        throw new Error("All AI providers failed");
+      }
+    }
+
+    console.log("AI response text:", responseText.substring(0, 300));
 
     // Clean up response text (sometimes models add markdown code blocks)
-    responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
+    responseText = responseText
+      .replace(/```json/g, "")
+      .replace(/```/g, "")
+      .trim();
 
     const jsonResponse = JSON.parse(responseText);
 
     // Validate structure
-    if (!jsonResponse.sourceLanguage || !Array.isArray(jsonResponse.translations)) {
-      throw new Error('Invalid data structure from AI model');
+    if (
+      !jsonResponse.sourceLanguage ||
+      !Array.isArray(jsonResponse.translations)
+    ) {
+      throw new Error("Invalid data structure from AI model");
     }
 
     // Helper to normalize language names
     const normalizeLanguage = (lang: string): string | null => {
       if (!lang) return null;
       const lower = lang.toLowerCase().trim();
-      if (['english', 'en', 'en-us'].includes(lower)) return 'English';
-      if (['malay', 'ms', 'bahasa', 'bahasa melayu'].includes(lower)) return 'Malay';
-      if (['chinese', 'zh', 'zh-cn', 'mandarin', 'simplified chinese', 'traditional chinese'].includes(lower)) return 'Chinese';
+      if (["english", "en", "en-us"].includes(lower)) return "English";
+      if (["malay", "ms", "bahasa", "bahasa melayu"].includes(lower))
+        return "Malay";
+      if (
+        [
+          "chinese",
+          "zh",
+          "zh-cn",
+          "mandarin",
+          "simplified chinese",
+          "traditional chinese",
+        ].includes(lower)
+      )
+        return "Chinese";
       return null; // Invalid language
     };
 
@@ -102,45 +219,48 @@ Follow these instructions precisely:
 
         return {
           ...t,
-          language: normalizedLang // Use the normalized name
+          language: normalizedLang, // Use the normalized name
         };
       })
       .filter((t: any) => {
         if (!t) return false;
         const { language, word, explanation, example } = t;
         return (
-          typeof language === 'string' &&
-          typeof word === 'string' &&
-          word.trim() !== '' &&
-          typeof explanation === 'string' &&
-          explanation.trim() !== '' &&
-          typeof example === 'string' &&
-          example.trim() !== ''
+          typeof language === "string" &&
+          typeof word === "string" &&
+          word.trim() !== "" &&
+          typeof explanation === "string" &&
+          explanation.trim() !== "" &&
+          typeof example === "string" &&
+          example.trim() !== ""
         );
       });
 
     const sanitizedResponse = {
-      sourceLanguage: normalizeLanguage(jsonResponse.sourceLanguage) || 'English',
+      sourceLanguage:
+        normalizeLanguage(jsonResponse.sourceLanguage) || "English",
       translations: sanitizedTranslations,
     };
 
     return new Response(JSON.stringify(sanitizedResponse), {
       status: 200,
       headers: {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
       },
     });
-
   } catch (error) {
-    console.error('Server error:', error);
-    return new Response(JSON.stringify({ 
-      error: 'Dictionary lookup failed', 
-      details: error instanceof Error ? error.message : String(error)
-    }), {
-      status: 500,
-      headers: {
-        'Content-Type': 'application/json',
+    console.error("Server error:", error);
+    return new Response(
+      JSON.stringify({
+        error: "Dictionary lookup failed",
+        details: error instanceof Error ? error.message : String(error),
+      }),
+      {
+        status: 500,
+        headers: {
+          "Content-Type": "application/json",
+        },
       },
-    });
+    );
   }
 };
