@@ -9,61 +9,57 @@
       <stop offset="0%" style="stop-color:#4F46E5" />
       <stop offset="100%" style="stop-color:#10B981" />
     </linearGradient>
-    <linearGradient id="bubbleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
-      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.85" />
-    </linearGradient>
   </defs>
   
   <!-- Background rounded rectangle -->
-  <rect width="512" height="512" rx="108" fill="url(#bgGrad)" />
+  <rect width="512" height="512" rx="100" fill="url(#bgGrad)" />
   
-  <!-- Left speech bubble (English "A") -->
-  <g transform="translate(80, 100)">
+  <!-- Left speech bubble (English "A") - LARGER -->
+  <g transform="translate(45, 70)">
     <path
-      d="M20 0 H140 Q160 0 160 20 V100 Q160 120 140 120 H60 L40 145 V120 H20 Q0 120 0 100 V20 Q0 0 20 0 Z"
-      fill="url(#bubbleGrad)"
+      d="M30 0 H190 Q220 0 220 30 V150 Q220 180 190 180 H90 L55 220 V180 H30 Q0 180 0 150 V30 Q0 0 30 0 Z"
+      fill="white"
       opacity="0.95"
     />
     <text
-      x="80"
-      y="78"
+      x="110"
+      y="120"
       font-family="Arial, Helvetica, sans-serif"
-      font-size="60"
+      font-size="100"
       font-weight="bold"
       fill="#4F46E5"
       text-anchor="middle"
     >A</text>
   </g>
   
-  <!-- Right speech bubble (Chinese "文") -->
-  <g transform="translate(270, 180)">
+  <!-- Right speech bubble (Chinese "文") - LARGER -->
+  <g transform="translate(245, 210)">
     <path
-      d="M20 0 H150 Q170 0 170 20 V110 Q170 130 150 130 H40 V155 L20 130 H20 Q0 130 0 110 V20 Q0 0 20 0 Z"
-      fill="url(#bubbleGrad)"
+      d="M30 0 H200 Q230 0 230 30 V160 Q230 190 200 190 H65 V230 L30 190 H30 Q0 190 0 160 V30 Q0 0 30 0 Z"
+      fill="white"
       opacity="0.95"
     />
     <text
-      x="85"
-      y="88"
+      x="115"
+      y="130"
       font-family="Microsoft YaHei, SimHei, sans-serif"
-      font-size="55"
+      font-size="95"
       font-weight="bold"
       fill="#10B981"
       text-anchor="middle"
     >文</text>
   </g>
   
-  <!-- Translation arrow -->
-  <g transform="translate(220, 120)">
+  <!-- Translation arrows -->
+  <g transform="translate(200, 175)">
     <path
-      d="M0 30 Q30 0 60 30"
+      d="M0 0 L50 0"
       stroke="white"
-      stroke-width="6"
+      stroke-width="8"
       fill="none"
       stroke-linecap="round"
       opacity="0.9"
     />
-    <polygon points="55,20 70,35 50,35" fill="white" opacity="0.9" />
+    <polygon points="45,-10 65,0 45,10" fill="white" opacity="0.9" />
   </g>
 </svg>
