@@ -1,11 +1,69 @@
-<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+<svg
+  width="512"
+  height="512"
+  viewBox="0 0 512 512"
+  xmlns="http://www.w3.org/2000/svg"
+>
   <defs>
-    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
-      <stop offset="0%" style="stop-color:#4F46E5;stop-opacity:1" />
-      <stop offset="100%" style="stop-color:#10B981;stop-opacity:1" />
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4F46E5" />
+      <stop offset="100%" style="stop-color:#10B981" />
+    </linearGradient>
+    <linearGradient id="bubbleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.95" />
+      <stop offset="100%" style="stop-color:#ffffff;stop-opacity:0.85" />
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="76.8" fill="url(#grad)"/>
-  <text x="50%" y="50%" font-family="Arial, sans-serif" font-size="204.8" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="central">K</text>
-  <path d="M 102.4 384 Q 179.2 332.8, 256 384 T 409.6 384" stroke="white" stroke-width="15.36" fill="none" stroke-linecap="round"/>
+  
+  <!-- Background rounded rectangle -->
+  <rect width="512" height="512" rx="108" fill="url(#bgGrad)" />
+  
+  <!-- Left speech bubble (English "A") -->
+  <g transform="translate(80, 100)">
+    <path
+      d="M20 0 H140 Q160 0 160 20 V100 Q160 120 140 120 H60 L40 145 V120 H20 Q0 120 0 100 V20 Q0 0 20 0 Z"
+      fill="url(#bubbleGrad)"
+      opacity="0.95"
+    />
+    <text
+      x="80"
+      y="78"
+      font-family="Arial, Helvetica, sans-serif"
+      font-size="60"
+      font-weight="bold"
+      fill="#4F46E5"
+      text-anchor="middle"
+    >A</text>
+  </g>
+  
+  <!-- Right speech bubble (Chinese "文") -->
+  <g transform="translate(270, 180)">
+    <path
+      d="M20 0 H150 Q170 0 170 20 V110 Q170 130 150 130 H40 V155 L20 130 H20 Q0 130 0 110 V20 Q0 0 20 0 Z"
+      fill="url(#bubbleGrad)"
+      opacity="0.95"
+    />
+    <text
+      x="85"
+      y="88"
+      font-family="Microsoft YaHei, SimHei, sans-serif"
+      font-size="55"
+      font-weight="bold"
+      fill="#10B981"
+      text-anchor="middle"
+    >文</text>
+  </g>
+  
+  <!-- Translation arrow -->
+  <g transform="translate(220, 120)">
+    <path
+      d="M0 30 Q30 0 60 30"
+      stroke="white"
+      stroke-width="6"
+      fill="none"
+      stroke-linecap="round"
+      opacity="0.9"
+    />
+    <polygon points="55,20 70,35 50,35" fill="white" opacity="0.9" />
+  </g>
 </svg>
