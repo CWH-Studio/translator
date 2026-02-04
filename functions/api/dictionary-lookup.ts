@@ -2,6 +2,7 @@
 
 interface Env {
   AI: any;
+  GEMINI_API_KEY: string;
 }
 
 const SYSTEM_PROMPT_TEMPLATE = (
@@ -66,46 +67,55 @@ async function retryWithBackoff<T>(
   throw lastError;
 }
 
-// Fallback to Pollinations.ai API
-async function callPollinationsAI(
+// Fallback to Google Gemini API
+async function callGeminiAI(
   text: string,
   systemPrompt: string,
+  apiKey: string,
 ): Promise<string> {
-  console.log("Falling back to Pollinations.ai API...");
+  console.log("Falling back to Google Gemini API...");
 
-  const response = await fetch("https://text.pollinations.ai/openai", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "openai",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Analyze the word: "${text}"` },
-      ],
-    }),
-  });
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        contents: [
+          {
+            parts: [
+              { text: `${systemPrompt}\n\nAnalyze the word: "${text}"` }
+            ]
+          }
+        ],
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 2048,
+        }
+      }),
+    }
+  );
 
   if (!response.ok) {
-    throw new Error(
-      `Pollinations API error: ${response.status} ${response.statusText}`,
-    );
+    const errorText = await response.text();
+    throw new Error(`Gemini API error: ${response.status} ${response.statusText} - ${errorText}`);
   }
 
   const data = (await response.json()) as any;
   
-  // Safely extract the content as a string
-  const content = data?.choices?.[0]?.message?.content;
+  // Safely extract the content from Gemini response
+  const content = data?.candidates?.[0]?.content?.parts?.[0]?.text;
   if (!content) {
-    throw new Error("Empty or invalid response from Pollinations API");
+    throw new Error("Empty or invalid response from Gemini API");
   }
   
   // Ensure it's a string
   const responseText = typeof content === "string" ? content : JSON.stringify(content);
   
   if (!responseText || responseText.trim() === "") {
-    throw new Error("Empty response from Pollinations API");
+    throw new Error("Empty response from Gemini API");
   }
   
   return responseText;
@@ -169,18 +179,18 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
     } catch (cfError) {
       console.error("Cloudflare AI failed after retries:", cfError);
 
-      // Fallback to Pollinations.ai
+      // Fallback to Google Gemini API
       try {
         responseText = await retryWithBackoff(
-          () => callPollinationsAI(text, systemPrompt),
+          () => callGeminiAI(text, systemPrompt, context.env.GEMINI_API_KEY),
           2, // max 2 retries for fallback
           1000, // 1s base delay
         );
-        console.log("Pollinations.ai fallback succeeded");
-      } catch (pollinationsError) {
+        console.log("Gemini API fallback succeeded");
+      } catch (geminiError) {
         console.error(
-          "Pollinations.ai fallback also failed:",
-          pollinationsError,
+          "Gemini API fallback also failed:",
+          geminiError,
         );
         throw new Error("All AI providers failed");
       }
