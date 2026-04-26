@@ -2,8 +2,3 @@ name = "translator"
 compatibility_date = "2024-10-24"
 pages_build_output_dir = "dist"
 
-# Environment variables will be set via Cloudflare Dashboard
-# Pages supports "preview" and "production" environments
-
-[ai]
-binding = "AI"

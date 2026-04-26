@@ -1,8 +1,6 @@
 // functions/api/dictionary-lookup.ts
 
-interface Env {
-  AI: any;
-}
+interface Env {}
 
 const SYSTEM_PROMPT_TEMPLATE = (
   text: string,
@@ -47,7 +45,7 @@ Follow these instructions precisely:
 // Retry helper with exponential backoff
 async function retryWithBackoff<T>(
   fn: () => Promise<T>,
-  maxRetries: number = 5,
+  maxRetries: number = 3,
   baseDelayMs: number = 1000,
 ): Promise<T> {
   let lastError: Error | null = null;
@@ -58,7 +56,6 @@ async function retryWithBackoff<T>(
       lastError = error instanceof Error ? error : new Error(String(error));
       console.log(`Attempt ${attempt + 1}/${maxRetries} failed: ${lastError.message}`);
       if (attempt < maxRetries - 1) {
-        // Exponential backoff: 1s, 2s, 4s, 8s, 16s
         const delay = baseDelayMs * Math.pow(2, attempt);
         console.log(`Waiting ${delay}ms before retry...`);
         await new Promise((resolve) => setTimeout(resolve, delay));
@@ -68,34 +65,37 @@ async function retryWithBackoff<T>(
   throw lastError;
 }
 
-// Call Cloudflare AI
-async function callCloudflareAI(
-  env: Env,
+// Call OpenRouter API (OpenAI-compatible)
+async function callOpenRouter(
+  apiKey: string,
   text: string,
   systemPrompt: string,
 ): Promise<string> {
-  const response = await env.AI.run("@cf/meta/llama-3-8b-instruct", {
-    messages: [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: `Analyze the word: "${text}"` },
-    ],
+  const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: "meta-llama/llama-3.1-8b-instruct:free",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Analyze the word: "${text}"` },
+      ],
+    }),
   });
 
-  let responseText = "";
-  if (
-    typeof response === "object" &&
-    response !== null &&
-    "response" in response
-  ) {
-    responseText = (response as any).response;
-  } else if (typeof response === "string") {
-    responseText = response;
-  } else {
-    responseText = JSON.stringify(response);
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`OpenRouter API error (${response.status}): ${errorText}`);
   }
 
+  const data = (await response.json()) as any;
+  const responseText = data.choices?.[0]?.message?.content;
+
   if (!responseText || responseText.trim() === "") {
-    throw new Error("Empty response from Cloudflare AI");
+    throw new Error("Empty response from OpenRouter");
   }
 
   return responseText;
@@ -103,7 +103,7 @@ async function callCloudflareAI(
 
 export const onRequest = async (context: { request: Request; env: Env }) => {
   try {
-    const { text } = (await context.request.json()) as { text: string };
+    const { text, apiKey } = (await context.request.json()) as { text: string; apiKey: string };
 
     if (!text) {
       return new Response(JSON.stringify({ error: "Missing text input" }), {
@@ -112,16 +112,22 @@ export const onRequest = async (context: { request: Request; env: Env }) => {
       });
     }
 
+    if (!apiKey) {
+      return new Response(JSON.stringify({ error: "Missing API key. Please configure your OpenRouter API key." }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
     const systemPrompt = SYSTEM_PROMPT_TEMPLATE(text);
     
-    // Call Cloudflare AI with 5 retries and exponential backoff
     const responseText = await retryWithBackoff(
-      () => callCloudflareAI(context.env, text, systemPrompt),
-      5,    // max 5 retries
-      1000, // 1s base delay (1s, 2s, 4s, 8s, 16s)
+      () => callOpenRouter(apiKey, text, systemPrompt),
+      3,
+      1000,
     );
     
-    console.log("Cloudflare AI succeeded");
+    console.log("OpenRouter API succeeded");
     console.log("AI response text:", responseText.substring(0, 300));
 
     // Clean up response text (sometimes models add markdown code blocks)

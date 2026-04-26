@@ -11,14 +11,14 @@ interface TTSResponse {
   error?: string;
 }
 
-export async function dictionaryLookup(text: string): Promise<TranslationResult> {
+export async function dictionaryLookup(text: string, apiKey: string): Promise<TranslationResult> {
   try {
     const response = await fetch('/api/dictionary-lookup', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ text, apiKey }),
     });
 
     if (!response.ok) {
@@ -66,12 +66,6 @@ async function playClientTTS(text: string, lang: string): Promise<string> {
       
       if (matchingVoices.length === 0) return null;
       
-      // Priority order for voice selection:
-      // 1. Google voices (highest quality)
-      // 2. Microsoft voices
-      // 3. Native voices
-      // 4. Any other voice
-      
       const googleVoice = matchingVoices.find(v => 
         v.name.toLowerCase().includes('google') && !v.name.toLowerCase().includes('uk')
       );
@@ -99,8 +93,7 @@ async function playClientTTS(text: string, lang: string): Promise<string> {
         console.log(`Using voice: ${bestVoice.name} for ${targetLang}`);
       }
       
-      // Adjust speech parameters for more natural sound
-      utterance.rate = 0.95;  // Slightly slower for clarity
+      utterance.rate = 0.95;
       utterance.pitch = 1.0;
       utterance.volume = 1.0;
 
@@ -112,7 +105,6 @@ async function playClientTTS(text: string, lang: string): Promise<string> {
       window.speechSynthesis.speak(utterance);
     };
 
-    // Wait for voices to load if they haven't loaded yet
     const voices = window.speechSynthesis.getVoices();
     if (voices.length === 0) {
       window.speechSynthesis.onvoiceschanged = () => {
@@ -126,7 +118,6 @@ async function playClientTTS(text: string, lang: string): Promise<string> {
 
 export async function textToSpeech(text: string, language: string): Promise<string> {
   try {
-    // Try server-side TTS proxy first (avoids CORS issues)
     const response = await fetch('/api/text-to-speech', {
       method: 'POST',
       headers: {
@@ -139,13 +130,11 @@ export async function textToSpeech(text: string, language: string): Promise<stri
       const result: TTSResponse = await response.json();
       
       if (result.success) {
-        // Check if we should use client-side TTS (for Chinese)
         if (result.useClientTTS) {
           console.log('Using client-side TTS for Chinese:', result.clientLang);
           return await playClientTTS(text, result.clientLang || language);
         }
         
-        // Play server-side generated audio
         if (result.audioData) {
           const audio = new Audio(`data:${result.contentType};base64,${result.audioData}`);
           
@@ -164,8 +153,6 @@ export async function textToSpeech(text: string, language: string): Promise<stri
     console.log('Server-side TTS failed:', error);
   }
   
-  // Fallback to Web Speech API if server-side TTS fails
   console.log('Falling back to Web Speech API');
   return playClientTTS(text, language);
 }
-

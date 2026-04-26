@@ -1,9 +1,7 @@
 // Server-side TTS using Google Translate (Unofficial)
 // Provides consistent, natural-sounding voices for all languages with mobile support
 
-interface Env {
-  AI: any; // Cloudflare Workers AI binding (kept for future use if needed)
-}
+interface Env {}
 
 interface TTSRequest {
   text: string;

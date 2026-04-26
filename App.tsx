@@ -1,9 +1,11 @@
-import React, { useState, useCallback } from 'react';
-import { dictionaryLookup, textToSpeech } from './services/geminiService';
+import React, { useState, useCallback, useEffect } from 'react';
+import { dictionaryLookup, textToSpeech } from './services/translationService';
 import type { TranslationResult } from './types';
 import { SearchIcon } from './components/icons/SearchIcon';
 import { LoadingSpinner } from './components/icons/LoadingSpinner';
 import { ResultCard } from './components/ResultCard';
+
+const API_KEY_STORAGE_KEY = 'openrouter_api_key';
 
 const App: React.FC = () => {
   const [query, setQuery] = useState<string>('');
@@ -11,9 +13,34 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [translationResult, setTranslationResult] = useState<TranslationResult | null>(null);
   const [playingAudio, setPlayingAudio] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState<string>('');
+  const [showApiKeyModal, setShowApiKeyModal] = useState<boolean>(false);
+  const [apiKeyInput, setApiKeyInput] = useState<string>('');
+
+  useEffect(() => {
+    const storedKey = localStorage.getItem(API_KEY_STORAGE_KEY);
+    if (storedKey) {
+      setApiKey(storedKey);
+    } else {
+      setShowApiKeyModal(true);
+    }
+  }, []);
+
+  const handleSaveApiKey = useCallback(() => {
+    const trimmed = apiKeyInput.trim();
+    if (!trimmed) return;
+    localStorage.setItem(API_KEY_STORAGE_KEY, trimmed);
+    setApiKey(trimmed);
+    setShowApiKeyModal(false);
+    setError(null);
+  }, [apiKeyInput]);
 
   const handleSearch = useCallback(async (event: React.FormEvent) => {
     event.preventDefault();
+    if (!apiKey) {
+      setShowApiKeyModal(true);
+      return;
+    }
     if (!query.trim()) {
       setError('Please enter a word to translate.');
       return;
@@ -24,15 +51,16 @@ const App: React.FC = () => {
     setTranslationResult(null);
 
     try {
-      const result = await dictionaryLookup(query);
+      const result = await dictionaryLookup(query, apiKey);
       setTranslationResult(result);
     } catch (err) {
       console.error(err);
-      setError('Failed to get translation. Please check your connection and try again.');
+      const message = err instanceof Error ? err.message : 'Failed to get translation.';
+      setError(message);
     } finally {
       setLoading(false);
     }
-  }, [query]);
+  }, [query, apiKey]);
 
   const handlePlayAudio = useCallback(async (word: string, explanation: string, example: string, language: string) => {
     const textToSpeak = `${word}. ${explanation}. ${example}`;
@@ -52,6 +80,43 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900 text-gray-800 dark:text-gray-200 font-sans transition-colors duration-300">
+      {showApiKeyModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 max-w-md w-full">
+            <h2 className="text-xl font-bold text-gray-800 dark:text-gray-200 mb-2">OpenRouter API Key</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+              Enter your OpenRouter API key to use the translator. Get a free key at{' '}
+              <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer" className="text-primary underline">openrouter.ai/keys</a>.
+            </p>
+            <input
+              type="password"
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleSaveApiKey()}
+              placeholder="sk-or-v1-..."
+              className="w-full px-4 py-3 text-base bg-gray-100 dark:bg-gray-700 border-2 border-transparent rounded-lg focus:outline-none focus:ring-2 focus:ring-primary dark:focus:ring-secondary mb-4"
+              autoFocus
+            />
+            <div className="flex gap-3 justify-end">
+              {apiKey && (
+                <button
+                  onClick={() => setShowApiKeyModal(false)}
+                  className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                >
+                  Cancel
+                </button>
+              )}
+              <button
+                onClick={handleSaveApiKey}
+                disabled={!apiKeyInput.trim()}
+                className="px-5 py-2 bg-primary hover:bg-indigo-700 text-white font-bold rounded-lg shadow-md transition-transform transform hover:scale-105 disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <main className="container mx-auto px-4 py-8 md:py-16">
         <header className="text-center mb-10">
           <h1 className="text-4xl md:text-5xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">
@@ -60,6 +125,12 @@ const App: React.FC = () => {
           <p className="mt-4 text-lg text-gray-600 dark:text-gray-400">
             Instant, accurate translations between English, Malay, and Chinese.
           </p>
+          <button
+            onClick={() => { setApiKeyInput(apiKey); setShowApiKeyModal(true); }}
+            className="mt-2 text-xs text-gray-400 dark:text-gray-500 hover:text-primary dark:hover:text-secondary underline transition-colors"
+          >
+            Configure API Key
+          </button>
         </header>
 
         <div className="max-w-2xl mx-auto bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-6 transition-shadow duration-300">
@@ -109,7 +180,7 @@ const App: React.FC = () => {
         </div>
       </main>
        <footer className="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
-            <p>Powered by Google Gemini. Built with React & Tailwind CSS. WHStudio@2025. Version 2.2</p>
+            <p>Powered by OpenRouter. Built with React & Tailwind CSS. WHStudio@2025. Version 3.0</p>
         </footer>
     </div>
   );
