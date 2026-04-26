@@ -79,7 +79,8 @@ const App: React.FC = () => {
 
     setPlayingAudio(audioKey);
     try {
-      await textToSpeech(word, language);
+      const textToSpeak = `${word}. ${explanation}. ${example}`;
+      await textToSpeech(textToSpeak, language);
       setPlayingAudio(null);
     } catch (err) {
       console.error('Failed to play audio:', err);

@@ -22,10 +22,45 @@ interface TTSErrorResponse {
   clientLang?: string;
 }
 
+// Split text into chunks at sentence boundaries, respecting max length
+function splitTextIntoChunks(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+
+  const chunks: string[] = [];
+  // Split on sentence-ending punctuation
+  const sentences = text.split(/(?<=[.!?。！？])\s*/);
+  let current = '';
+
+  for (const sentence of sentences) {
+    if (!sentence.trim()) continue;
+    if (current.length + sentence.length + 1 <= maxLen) {
+      current += (current ? ' ' : '') + sentence;
+    } else {
+      if (current) chunks.push(current);
+      // If a single sentence exceeds maxLen, split by words
+      if (sentence.length > maxLen) {
+        const words = sentence.split(/\s+/);
+        current = '';
+        for (const word of words) {
+          if (current.length + word.length + 1 <= maxLen) {
+            current += (current ? ' ' : '') + word;
+          } else {
+            if (current) chunks.push(current);
+            current = word;
+          }
+        }
+      } else {
+        current = sentence;
+      }
+    }
+  }
+  if (current) chunks.push(current);
+  return chunks;
+}
+
 export async function onRequestPost(context: { request: Request; env: Env }): Promise<Response> {
   const { request } = context;
   
-  // Common headers for all responses (CORS is critical for mobile)
   const corsHeaders = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*'
@@ -37,14 +72,10 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
     if (!text || !language) {
       return new Response(
         JSON.stringify({ success: false, error: 'Text and language are required' } as TTSErrorResponse),
-        { 
-          status: 400,
-          headers: corsHeaders
-        }
+        { status: 400, headers: corsHeaders }
       );
     }
 
-    // Map languages to Google Translate language codes
     let targetLang = 'en';
     switch (language.toLowerCase()) {
       case 'malay':
@@ -64,51 +95,60 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
         break;
     }
 
-    // Use Google Translate TTS for ALL languages
-    // This provides consistency, reliability, and free access without API keys
     try {
-      const encodedText = encodeURIComponent(text);
-      const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${targetLang}&q=${encodedText}`;
-      
-      const ttsResponse = await fetch(googleTTSUrl, {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-        }
-      });
+      const chunks = splitTextIntoChunks(text, 180);
+      const audioChunks: Uint8Array[] = [];
 
-      if (ttsResponse.ok) {
-        const audioArrayBuffer = await ttsResponse.arrayBuffer();
-        const audioBuffer = new Uint8Array(audioArrayBuffer);
+      for (const chunk of chunks) {
+        const encodedText = encodeURIComponent(chunk);
+        const googleTTSUrl = `https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=${targetLang}&q=${encodedText}`;
         
-        // Convert to base64 in chunks to avoid max call stack size exceeded
-        let binary = '';
-        const chunkSize = 8192;
-        for (let i = 0; i < audioBuffer.length; i += chunkSize) {
-          const chunk = audioBuffer.subarray(i, i + chunkSize);
-          binary += String.fromCharCode(...chunk);
-        }
-        const base64Audio = btoa(binary);
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            audioData: base64Audio,
-            contentType: 'audio/mpeg',
-            source: `google-translate-${targetLang}`
-          } as TTSSuccessResponse),
-          { 
-            headers: corsHeaders
+        const ttsResponse = await fetch(googleTTSUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
           }
-        );
-      } else {
-        throw new Error(`Google TTS failed with status: ${ttsResponse.status}`);
+        });
+
+        if (!ttsResponse.ok) {
+          throw new Error(`Google TTS failed with status: ${ttsResponse.status}`);
+        }
+
+        const audioArrayBuffer = await ttsResponse.arrayBuffer();
+        audioChunks.push(new Uint8Array(audioArrayBuffer));
       }
+
+      // Concatenate all audio chunks
+      const totalLength = audioChunks.reduce((sum, c) => sum + c.length, 0);
+      const combined = new Uint8Array(totalLength);
+      let offset = 0;
+      for (const c of audioChunks) {
+        combined.set(c, offset);
+        offset += c.length;
+      }
+
+      // Convert to base64 in chunks to avoid max call stack size
+      let binary = '';
+      const batchSize = 8192;
+      for (let i = 0; i < combined.length; i += batchSize) {
+        const slice = combined.subarray(i, i + batchSize);
+        binary += String.fromCharCode(...slice);
+      }
+      const base64Audio = btoa(binary);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          audioData: base64Audio,
+          contentType: 'audio/mpeg',
+          source: `google-translate-${targetLang}`
+        } as TTSSuccessResponse),
+        { headers: corsHeaders }
+      );
     } catch (ttsError) {
       console.error(`Google TTS failed for ${targetLang}:`, ttsError);
-      // Fall through to client-side fallback
     }
 
-    // Fallback to client-side TTS if server-side method fails
+    // Fallback to client-side TTS
     const langMap: { [key: string]: string } = {
       'english': 'en-US',
       'malay': 'ms-MY',
@@ -122,10 +162,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
         useClientTTS: true,
         clientLang: langMap[language.toLowerCase()] || 'en-US'
       } as TTSErrorResponse),
-      {
-        status: 200,
-        headers: corsHeaders
-      }
+      { status: 200, headers: corsHeaders }
     );
 
   } catch (error) {
@@ -137,10 +174,7 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
         useClientTTS: true,
         clientLang: 'en-US'
       } as TTSErrorResponse),
-      {
-        status: 500,
-        headers: corsHeaders
-      }
+      { status: 500, headers: corsHeaders }
     );
   }
 }
