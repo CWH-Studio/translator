@@ -78,7 +78,7 @@ async function callOpenRouter(
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "meta-llama/llama-3.1-8b-instruct:free",
+      model: "openrouter/free",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: `Analyze the word: "${text}"` },
