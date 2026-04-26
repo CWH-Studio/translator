@@ -11,6 +11,20 @@ interface TTSResponse {
   error?: string;
 }
 
+// Track active audio element for stop functionality
+let activeAudio: HTMLAudioElement | null = null;
+
+export function stopAudio(): void {
+  if (activeAudio) {
+    activeAudio.pause();
+    activeAudio.currentTime = 0;
+    activeAudio = null;
+  }
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+}
+
 export async function dictionaryLookup(text: string, apiKey: string): Promise<TranslationResult> {
   try {
     const response = await fetch('/api/dictionary-lookup', {
@@ -146,11 +160,12 @@ export async function textToSpeech(text: string, language: string): Promise<stri
       // Play server-side generated audio
       if (result.success && result.audioData) {
         const audio = new Audio(`data:${result.contentType};base64,${result.audioData}`);
+        activeAudio = audio;
         
         await new Promise<void>((resolve, reject) => {
-          audio.onended = () => resolve();
-          audio.onerror = () => reject(new Error('Audio playback failed'));
-          audio.play().catch(reject);
+          audio.onended = () => { activeAudio = null; resolve(); };
+          audio.onerror = () => { activeAudio = null; reject(new Error('Audio playback failed')); };
+          audio.play().catch((err) => { activeAudio = null; reject(err); });
         });
         
         console.log(`TTS source: ${result.source || 'server-proxy'}`);

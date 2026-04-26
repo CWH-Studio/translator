@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { dictionaryLookup, textToSpeech } from './services/translationService';
+import { dictionaryLookup, textToSpeech, stopAudio } from './services/translationService';
 import type { TranslationResult } from './types';
 import { SearchIcon } from './components/icons/SearchIcon';
 import { LoadingSpinner } from './components/icons/LoadingSpinner';
@@ -63,9 +63,21 @@ const App: React.FC = () => {
   }, [query, apiKey]);
 
   const handlePlayAudio = useCallback(async (word: string, explanation: string, example: string, language: string) => {
-    if (playingAudio === `${word}-${language}`) return;
+    const audioKey = `${word}-${language}`;
+    
+    // If already playing this word, stop it
+    if (playingAudio === audioKey) {
+      stopAudio();
+      setPlayingAudio(null);
+      return;
+    }
 
-    setPlayingAudio(`${word}-${language}`);
+    // Stop any currently playing audio first
+    if (playingAudio) {
+      stopAudio();
+    }
+
+    setPlayingAudio(audioKey);
     try {
       await textToSpeech(word, language);
       setPlayingAudio(null);
@@ -177,7 +189,7 @@ const App: React.FC = () => {
         </div>
       </main>
        <footer className="text-center py-6 text-gray-500 dark:text-gray-400 text-sm">
-            <p>Powered by OpenRouter. Built with React & Tailwind CSS. WHStudio@2025. Version 3.0</p>
+            <p>Powered by OpenRouter. Built with React & Tailwind CSS. WHStudio@2025. Version 3.1</p>
         </footer>
     </div>
   );

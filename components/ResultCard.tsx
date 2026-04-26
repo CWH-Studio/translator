@@ -2,7 +2,6 @@
 import React from 'react';
 import type { Translation } from '../types';
 import { SpeakerIcon } from './icons/SpeakerIcon';
-import { LoadingSpinner } from './icons/LoadingSpinner';
 
 interface ResultCardProps {
   translation: Translation;
@@ -23,11 +22,16 @@ export const ResultCard: React.FC<ResultCardProps> = ({ translation, onPlayAudio
         </div>
         <button
           onClick={onPlayAudio}
-          disabled={isPlaying}
-          className="p-3 rounded-full bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:cursor-not-allowed"
-          aria-label={`Listen to ${translation.word}`}
+          className={`p-3 rounded-full transition-colors ${isPlaying ? 'bg-red-100 dark:bg-red-900 hover:bg-red-200 dark:hover:bg-red-800' : 'bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600'}`}
+          aria-label={isPlaying ? `Stop reading ${translation.word}` : `Listen to ${translation.word}`}
         >
-          {isPlaying ? <LoadingSpinner className="w-6 h-6 text-primary dark:text-secondary" /> : <SpeakerIcon className="w-6 h-6 text-gray-600 dark:text-gray-300" />}
+          {isPlaying ? (
+            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 24 24" className="w-6 h-6 text-red-500 dark:text-red-400">
+              <path d="M6 6h12v12H6z" />
+            </svg>
+          ) : (
+            <SpeakerIcon className="w-6 h-6 text-gray-600 dark:text-gray-300" />
+          )}
         </button>
       </div>
       <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
