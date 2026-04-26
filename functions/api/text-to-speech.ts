@@ -79,7 +79,15 @@ export async function onRequestPost(context: { request: Request; env: Env }): Pr
       if (ttsResponse.ok) {
         const audioArrayBuffer = await ttsResponse.arrayBuffer();
         const audioBuffer = new Uint8Array(audioArrayBuffer);
-        const base64Audio = btoa(String.fromCharCode(...audioBuffer));
+        
+        // Convert to base64 in chunks to avoid max call stack size exceeded
+        let binary = '';
+        const chunkSize = 8192;
+        for (let i = 0; i < audioBuffer.length; i += chunkSize) {
+          const chunk = audioBuffer.subarray(i, i + chunkSize);
+          binary += String.fromCharCode(...chunk);
+        }
+        const base64Audio = btoa(binary);
         
         return new Response(
           JSON.stringify({

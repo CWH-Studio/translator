@@ -129,24 +129,24 @@ export async function textToSpeech(text: string, language: string): Promise<stri
     if (response.ok) {
       const result: TTSResponse = await response.json();
       
-      if (result.success) {
-        if (result.useClientTTS) {
-          console.log('Using client-side TTS for Chinese:', result.clientLang);
-          return await playClientTTS(text, result.clientLang || language);
-        }
+      // Server says use client-side TTS
+      if (result.useClientTTS) {
+        console.log('Server requested client-side TTS:', result.clientLang);
+        return await playClientTTS(text, result.clientLang || language);
+      }
+
+      // Play server-side generated audio
+      if (result.success && result.audioData) {
+        const audio = new Audio(`data:${result.contentType};base64,${result.audioData}`);
         
-        if (result.audioData) {
-          const audio = new Audio(`data:${result.contentType};base64,${result.audioData}`);
-          
-          await new Promise<void>((resolve, reject) => {
-            audio.onended = () => resolve();
-            audio.onerror = () => reject(new Error('Audio playback failed'));
-            audio.play().catch(reject);
-          });
-          
-          console.log(`TTS source: ${result.source || 'server-proxy'}`);
-          return '';
-        }
+        await new Promise<void>((resolve, reject) => {
+          audio.onended = () => resolve();
+          audio.onerror = () => reject(new Error('Audio playback failed'));
+          audio.play().catch(reject);
+        });
+        
+        console.log(`TTS source: ${result.source || 'server-proxy'}`);
+        return '';
       }
     }
   } catch (error) {
