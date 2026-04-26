@@ -91,6 +91,12 @@ async function playClientTTS(text: string, lang: string): Promise<string> {
       if (bestVoice) {
         utterance.voice = bestVoice;
         console.log(`Using voice: ${bestVoice.name} for ${targetLang}`);
+      } else {
+        // No matching voice found — try using any available voice
+        const allVoices = window.speechSynthesis.getVoices();
+        if (allVoices.length > 0) {
+          console.log(`No voice for ${targetLang}, using default voice`);
+        }
       }
       
       utterance.rate = 0.95;
@@ -99,7 +105,9 @@ async function playClientTTS(text: string, lang: string): Promise<string> {
 
       utterance.onend = () => resolve('');
       utterance.onerror = (event) => {
-        reject(new Error(`Speech synthesis failed: ${event.error}`));
+        console.warn(`Speech synthesis error for ${targetLang}: ${event.error}`);
+        // Resolve instead of reject — don't block the UI for TTS failures
+        resolve('');
       };
 
       window.speechSynthesis.speak(utterance);
@@ -153,6 +161,12 @@ export async function textToSpeech(text: string, language: string): Promise<stri
     console.log('Server-side TTS failed:', error);
   }
   
-  console.log('Falling back to Web Speech API');
-  return playClientTTS(text, language);
+  // Fallback to Web Speech API
+  try {
+    console.log('Falling back to Web Speech API');
+    return await playClientTTS(text, language);
+  } catch (fallbackError) {
+    console.warn('Web Speech API fallback also failed:', fallbackError);
+    return '';
+  }
 }

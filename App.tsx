@@ -63,17 +63,14 @@ const App: React.FC = () => {
   }, [query, apiKey]);
 
   const handlePlayAudio = useCallback(async (word: string, explanation: string, example: string, language: string) => {
-    const textToSpeak = `${word}. ${explanation}. ${example}`;
     if (playingAudio === `${word}-${language}`) return;
 
     setPlayingAudio(`${word}-${language}`);
     try {
-      // Web Speech API speaks directly - no audio decoding needed
-      await textToSpeech(textToSpeak, language);
+      await textToSpeech(word, language);
       setPlayingAudio(null);
     } catch (err) {
       console.error('Failed to play audio:', err);
-      setError('Sorry, could not play audio for this word.');
       setPlayingAudio(null);
     }
   }, [playingAudio]);
